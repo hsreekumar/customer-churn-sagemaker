@@ -22,3 +22,6 @@ Customer Churn Model to predict if a customer would be retained or not.
 5. RegisterChurnModel (SageMaker Register Model Step)- Register the trained churn model onto SageMaker Model Registry.
 6. CreateModelStep (SageMaker Create Model Step)- Creates SageMaker Model by taking the artifacts of the best model
 
+Inference
+1. LambdaFunction is deployed with all the required libraries packaged. It refers to the trained model for inference results.
+2. ApiGateway is configured to point to the lambda function to be able to access the endpoint for realtime inference.
