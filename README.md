@@ -23,5 +23,5 @@ Customer Churn Model to predict if a customer would be retained or not.
 6. CreateModelStep (SageMaker Create Model Step)- Creates SageMaker Model by taking the artifacts of the best model
 
 Inference
-1. LambdaFunction is deployed with all the required libraries packaged. It refers to the trained model for inference results.
+1. LambdaFunction is deployed with all the required libraries packaged as a Docker image. It refers to the trained model for inference results.
 2. ApiGateway is configured to point to the lambda function to be able to access the endpoint for realtime inference.
