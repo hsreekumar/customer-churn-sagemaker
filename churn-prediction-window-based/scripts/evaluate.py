@@ -20,6 +20,7 @@ import numpy as np
 import json
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve, auc
+import argparse
 
 # Define your model class (make sure this matches the model definition used during training)
 class SimpleNN(nn.Module):
@@ -36,20 +37,38 @@ class SimpleNN(nn.Module):
         return x
 
 def main():
+    # Argument parsing
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--window-size', type=int, required=True, help='The rolling window size used for feature engineering')
+    args = parser.parse_args()
+    window_size = args.window_size
+
     # Load test data
     test_data = pd.read_csv('/opt/ml/processing/test/test.csv')
 
-    # Preprocess test data
-    scaler = StandardScaler()
-    test_data[['esent', 'eopenrate', 'eclickrate', 'avgorder', 'ordfreq']] = scaler.fit_transform(
-        test_data[['esent', 'eopenrate', 'eclickrate', 'avgorder', 'ordfreq']]
-    )
+    # Define numerical features based on window size
+    numerical_features = [
+        f'esent_rolling_mean_{window_size}', f'eopenrate_rolling_mean_{window_size}', f'eclickrate_rolling_mean_{window_size}', 
+        f'avgorder_rolling_mean_{window_size}', f'ordfreq_rolling_mean_{window_size}', 
+        f'esent_rolling_std_{window_size}', f'eopenrate_rolling_std_{window_size}', f'eclickrate_rolling_std_{window_size}', 
+        f'avgorder_rolling_std_{window_size}', f'ordfreq_rolling_std_{window_size}'
+    ]
 
-    features = test_data.drop('retained', axis=1).values.astype(np.float32)
+    # Add additional features starting with 'favday_' or 'city_'
+    additional_features = [col for col in test_data.columns if col.startswith('favday_') or col.startswith('city_')]
+    
+    # Preprocess test data
+    # Fit scaler only on numerical features
+    scaler = StandardScaler()
+    test_data[numerical_features] = scaler.fit_transform(test_data[numerical_features])
+
+    # Combine features
+    all_features = numerical_features + additional_features
+
+    # Prepare features and targets
+    features = test_data[all_features].values.astype(np.float32)
     targets = test_data['retained'].values
 
-    print(f"features shape: {features.shape[1]}")
-    
     # Extract the model from the tar.gz file
     model_tar_path = '/opt/ml/processing/models/model.tar.gz'
     extract_path = '/opt/ml/processing/models/'
@@ -76,9 +95,8 @@ def main():
         outputs = model(features_tensor)
         _, predicted = torch.max(outputs, 1)
 
-    # Calculate accuracy (example metric)
+    # Calculate metrics
     accuracy = (predicted.numpy() == targets).mean()
-
     fpr, tpr, thresholds = roc_curve(targets, predicted.numpy())
     auc_score = auc(fpr, tpr)
     report_dict = {
@@ -90,12 +108,8 @@ def main():
     }
 
     # Save evaluation results
-    evaluation_results = {
-        'metric': 'accuracy',
-        'value': accuracy.item()  # Ensure accuracy is converted to a float
-    }
-
-    with open('/opt/ml/processing/evaluation/evaluation.json', 'w') as f:
+    evaluation_output_path = '/opt/ml/processing/evaluation/evaluation.json'
+    with open(evaluation_output_path, 'w') as f:
         json.dump(report_dict, f)
 
 if __name__ == '__main__':

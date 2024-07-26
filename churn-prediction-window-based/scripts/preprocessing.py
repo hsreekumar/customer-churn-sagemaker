@@ -1,46 +1,37 @@
 import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import os
 
+def add_rolling_features(data, window_size):
+    for column in ['esent', 'eopenrate', 'eclickrate', 'avgorder', 'ordfreq']:
+        data[f'{column}_rolling_mean_{window_size}'] = data[column].rolling(window=window_size).mean()
+        data[f'{column}_rolling_std_{window_size}'] = data[column].rolling(window=window_size).std()
+    data.fillna(0, inplace=True)
+    return data
 
-local_file_path = '/opt/ml/processing/input/data.csv'
-print(f'Downloading from s3')
-# Load data
-data = pd.read_csv(local_file_path)
-print(f'Read from s3')
-# Convert date columns
+data = pd.read_csv('/opt/ml/processing/input/data.csv')
 data["firstorder"] = pd.to_datetime(data["firstorder"], errors='coerce')
 data["lastorder"] = pd.to_datetime(data["lastorder"], errors='coerce')
+data['created'] = pd.to_datetime(data['created'])
 
-# Drop rows with null values
 data = data.dropna()
 
-# Create new columns based on date differences
 data["first_last_days_diff"] = (data['lastorder'] - data['firstorder']).dt.days
-data['created'] = pd.to_datetime(data['created'])
 data['created_first_days_diff'] = (data['created'] - data['firstorder']).dt.days
 
-# Drop unnecessary columns
 data.drop(['custid', 'created', 'firstorder', 'lastorder'], axis=1, inplace=True)
-
-# Apply one-hot encoding to categorical columns
 data = pd.get_dummies(data, prefix=['favday', 'city'], columns=['favday', 'city'])
 
-# Split data into train and test sets
-train, test = train_test_split(data, test_size=0.2, random_state=42)
+for window_size in [15, 30, 45]:
+    window_data = add_rolling_features(data.copy(), window_size)
+    train, test = train_test_split(window_data, test_size=0.2, random_state=42)
 
-# Define directories for train and test data
-train_dir = '/opt/ml/processing/train'
-test_dir = '/opt/ml/processing/test'
+    window_train_dir = f'/opt/ml/processing/train_{window_size}D'
+    window_test_dir = f'/opt/ml/processing/test_{window_size}D'
+    os.makedirs(window_train_dir, exist_ok=True)
+    os.makedirs(window_test_dir, exist_ok=True)
 
-# Create directories if they don't exist
-os.makedirs(train_dir, exist_ok=True)
-os.makedirs(test_dir, exist_ok=True)
-
-# Save processed data to CSV files
-train.to_csv(os.path.join(train_dir, 'train.csv'), index=False)
-test.to_csv(os.path.join(test_dir, 'test.csv'), index=False)
-
-# Log the shapes of the train and test datasets
-print(f'Train data shape: {train.shape}')
-print(f'Test data shape: {test.shape}')
+    train.to_csv(os.path.join(window_train_dir, 'train.csv'), index=False)
+    test.to_csv(os.path.join(window_test_dir, 'test.csv'), index=False)
